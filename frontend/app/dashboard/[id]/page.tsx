@@ -29,7 +29,7 @@ export default function AnalysisPage() {
   const { id } = useParams()
   const incident = MOCK_INCIDENTS[id as string] || MOCK_INCIDENTS['dt-9921']
   const [loading, setLoading] = useState(false)
-  const [analysis, setAnalysis] = useState<any>(MOCK_ANALYSIS)
+  const [analysis, setAnalysis] = useState<any>(null)
   const [logs, setLogs] = useState(incident.pasted_logs)
   const [repo, setRepo] = useState('https://gitlab.com/company/' + incident.service_name)
   const [toast, setToast] = useState('')
