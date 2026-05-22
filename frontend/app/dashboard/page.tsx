@@ -78,7 +78,7 @@ export default function Dashboard() {
 
           <div style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '14px' }}>
             <div style={{ fontSize: '10px', color: '#475569', marginBottom: '8px', letterSpacing: '0.5px' }}>CI/CD LOGS</div>
-            <pre style={{ fontSize: '12px', color: '#ef4444', fontFamily: 'monospace', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{selected.logs}</pre>
+            <pre style={{ fontSize: '12px', color: '#ef4444', fontFamily: 'monospace', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{selected.pasted_logs}</pre>
           </div>
 
           <button onClick={() => router.push(`/dashboard/${selected.id}`)} style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', width: '100%' }}>
