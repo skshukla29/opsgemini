@@ -17,6 +17,7 @@ class AnalysisResult(BaseModel):
     confidence_score: int = Field(ge=0, le=100)
     root_cause: str
     suspicious_commit: str
+    suspicious_commit_reason: str | None = None
     beginner_explanation: str
     suggested_patch: str
     next_steps: list[str]

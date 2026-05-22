@@ -32,63 +32,6 @@ class GeminiService:
         else:
             self._model = None
 
-    def _fallback(self, payload: IncidentPayload) -> AnalysisResult:
-        lower = f"{payload.dynatrace_anomaly} {payload.pasted_logs or ''}".lower()
-
-        if "db_password" in lower or "undefined" in lower:
-            category = "Configuration"
-            confidence = 95
-            root = "Missing DB_PASSWORD environment variable in runtime environment."
-            patch = "```diff\n- const dbPassword = process.env.DB_PASSWORD;\n+ const dbPassword = process.env.DB_PASSWORD ?? process.env.DB_PASS;\n+ if (!dbPassword) throw new Error('DB password not configured');\n```"
-            next_steps = [
-                "Validate deployment secrets are mounted for the production namespace.",
-                "Add startup env validation to fail fast before serving traffic.",
-                "Rotate and re-sync DB credentials in CI/CD variables.",
-            ]
-        elif "cannot find module 'sharp'" in lower:
-            category = "Dependency"
-            confidence = 93
-            root = "The sharp package is missing from production dependencies, causing container crash loops."
-            patch = "```diff\n+ npm install sharp --save\n```"
-            next_steps = [
-                "Pin sharp version in package.json and lockfile.",
-                "Rebuild image with clean layer cache.",
-                "Add a CI step to detect missing runtime dependencies.",
-            ]
-        elif "redis" in lower or "econnrefused" in lower:
-            category = "Infrastructure"
-            confidence = 90
-            root = "Application cannot connect to Redis at configured endpoint, leading to token timeouts."
-            patch = "```diff\n- REDIS_HOST=127.0.0.1\n+ REDIS_HOST=redis.internal\n```"
-            next_steps = [
-                "Check Redis service health and DNS resolution from pod.",
-                "Increase retry/backoff for auth token cache lookups.",
-                "Deploy connection pooling and timeout tuning.",
-            ]
-        else:
-            category = "Runtime Crash"
-            confidence = 88
-            root = "A recent deployment introduced an unhandled runtime exception under production traffic."
-            patch = "```diff\n+ process.on('unhandledRejection', (err) => {\n+   logger.error(err);\n+   process.exit(1);\n+ });\n```"
-            next_steps = [
-                "Correlate deploy timestamp with error spike in Dynatrace.",
-                "Roll back suspicious commit and re-run smoke tests.",
-                "Add guardrails and typed validation at ingress boundaries.",
-            ]
-
-        return AnalysisResult(
-            issue_category=category,
-            confidence_score=confidence,
-            root_cause=root,
-            suspicious_commit="a1f3c92 - hotfix: adjust runtime config loading",
-            beginner_explanation=(
-                "The app broke because one required setting or dependency was missing after deployment. "
-                "OpsGemini matched the failure pattern from logs and anomaly behavior."
-            ),
-            suggested_patch=patch,
-            next_steps=next_steps,
-        )
-
     def _extract_json(self, raw_text: str) -> dict:
         text = raw_text.strip()
         text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
@@ -106,20 +49,47 @@ class GeminiService:
 
     async def analyze(self, payload: IncidentPayload) -> AnalysisResult:
         if not self._enabled or self._model is None:
-            return self._fallback(payload)
+            raise RuntimeError("GEMINI_API_KEY is not configured")
+
+        anomaly = payload.dynatrace_anomaly.strip()
+        logs = (payload.pasted_logs or "").strip()
+        repo = (payload.gitlab_repo or "").strip() or "N/A"
+        log_context = logs if logs else "No CI/CD logs were provided. Infer from the anomaly and repository context."
 
         prompt = (
-            "Analyze the following incident and return strict JSON only.\n\n"
+            "You are OpsGemini, an incident triage agent. Analyze the current incident and return strict JSON only.\n"
+            "Use the exact keys below and do not repeat canned text between runs. Ground every field in the supplied evidence.\n\n"
+            "Return this JSON structure only:\n"
+            "{\n"
+            '  "issue_category": "",\n'
+            '  "confidence_score": 0,\n'
+            '  "root_cause": "",\n'
+            '  "suspicious_commit": "",\n'
+            '  "suspicious_commit_reason": "",\n'
+            '  "beginner_explanation": "",\n'
+            '  "suggested_patch": "",\n'
+            '  "next_steps": []\n'
+            "}\n\n"
+            "Rules:\n"
+            "- Return valid JSON only, no markdown fences, no prose outside the JSON.\n"
+            "- Infer the most likely failure mode from anomaly + logs + repo context.\n"
+            "- Confidence must change based on evidence strength.\n"
+            "- Suggested patch must be specific to this incident, not generic.\n"
+            "- Use different wording when the evidence changes.\n\n"
             f"Service: {payload.service_name}\n"
-            f"Dynatrace anomaly: {payload.dynatrace_anomaly}\n"
-            f"CI/CD logs: {payload.pasted_logs or 'N/A'}\n"
-            f"GitLab repo: {payload.gitlab_repo or 'N/A'}\n"
+            f"Dynatrace anomaly: {anomaly}\n"
+            f"CI/CD logs: {log_context}\n"
+            f"GitLab repo: {repo}\n"
         )
 
         try:
             response = await self._model.generate_content_async(prompt)
             raw_text = (response.text or "").strip()
+            if not raw_text:
+                raise ValueError("Gemini returned an empty response")
             parsed = self._extract_json(raw_text)
+            if not parsed.get("suspicious_commit") and parsed.get("suspicious_commit_reason"):
+                parsed["suspicious_commit"] = parsed["suspicious_commit_reason"]
             return AnalysisResult.model_validate(parsed)
-        except Exception:
-            return self._fallback(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Gemini returned malformed JSON: {exc}") from exc

@@ -8,21 +8,36 @@ const MOCK_INCIDENTS: Record<string, any> = {
   'dt-9923': { service_name: 'auth-service', severity: 'high', dynatrace_anomaly: 'P99 response time 8000ms. /api/auth/token timeouts.', pasted_logs: 'Redis ECONNREFUSED 127.0.0.1:6379' },
 }
 
-const MOCK_ANALYSIS = {
-  issue_category: 'Env Variable Missing',
-  confidence_score: 94,
-  root_cause: 'DB_PASSWORD environment variable was removed from production config in commit a3f92b1. dotenv package not loaded before database connection attempt.',
-  suspicious_commit: 'a3f92b1 — "feat: remove dotenv from prod config" by john.doe · 14:25 UTC',
-  beginner_explanation: 'Someone accidentally removed the database password from the server settings file. The app tried to connect to the database but had no password — so it crashed immediately. The fix is simple: add the password back to the environment variables.',
-  suggested_patch: `// server.js
-+ require('dotenv').config();
-  const db = require('./db');
-- db.connect(process.env.URL);
-+ db.connect({
-+   host: process.env.DB_HOST,
-+   password: process.env.DB_PASSWORD
-+ });`,
-  next_steps: ['Add DB_PASSWORD to production environment variables', 'Verify dotenv is loaded before db.connect()', 'Redeploy payment-api service', 'Monitor error rate for 10 minutes after deploy'],
+const normalizeAnalysis = (data: any) => {
+  const payload = data?.status === 'success' && data?.analysis
+    ? (typeof data.analysis === 'string' ? JSON.parse(data.analysis) : data.analysis)
+    : data
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Gemini returned an invalid analysis payload')
+  }
+
+  const confidenceValue = payload.confidence_score ?? payload.confidence
+  const confidenceScore = Number.parseInt(String(confidenceValue), 10)
+
+  if (!Number.isFinite(confidenceScore)) {
+    throw new Error('Gemini analysis did not include a valid confidence score')
+  }
+
+  const nextSteps = Array.isArray(payload.next_steps)
+    ? payload.next_steps.map((step: unknown) => String(step)).filter(Boolean)
+    : []
+
+  return {
+    issue_category: String(payload.issue_category || 'Unknown issue'),
+    confidence_score: confidenceScore,
+    root_cause: String(payload.root_cause || 'No root cause was returned.'),
+    suspicious_commit: String(payload.suspicious_commit || payload.suspicious_commit_reason || 'Not provided'),
+    suspicious_commit_reason: payload.suspicious_commit_reason ? String(payload.suspicious_commit_reason) : '',
+    beginner_explanation: String(payload.beginner_explanation || 'No beginner explanation was returned.'),
+    suggested_patch: String(payload.suggested_patch || ''),
+    next_steps: nextSteps,
+  }
 }
 
 export default function AnalysisPage() {
@@ -38,28 +53,34 @@ export default function AnalysisPage() {
     setLoading(true)
     setAnalysis(null)
     try {
+      const logText = logs.trim()
       const res = await fetch('http://localhost:8000/api/analyze-incident', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dynatrace_anomaly: incident.dynatrace_anomaly, service_name: incident.service_name, pasted_logs: logs, gitlab_repo: repo })
+        body: JSON.stringify({ dynatrace_anomaly: incident.dynatrace_anomaly, service_name: incident.service_name, pasted_logs: logText, gitlab_repo: repo })
       })
-      if (!res.ok) throw new Error('Analyze API request failed')
+      if (!res.ok) {
+        let message = 'Analyze API request failed'
+        try {
+          const errorBody = await res.json()
+          if (errorBody?.detail) message = String(errorBody.detail)
+        } catch {
+          // Keep the generic message if the backend did not return JSON.
+        }
+        throw new Error(message)
+      }
 
       const data = await res.json()
 
-      // Preferred backend contract: { status: 'success', analysis: '{...json string...}' }
-      if (data?.status === 'success' && typeof data?.analysis === 'string') {
-        setAnalysis(JSON.parse(data.analysis))
-      } else if (data?.issue_category && data?.root_cause) {
-        // Also support direct JSON analysis payloads returned by some backend versions.
-        setAnalysis(data)
-      } else {
-        throw new Error('Analyze API returned invalid payload')
-      }
-    } catch {
-      setAnalysis(MOCK_ANALYSIS)
+      setAnalysis(normalizeAnalysis(data))
+      showToast('✓ Gemini analysis completed')
+    } catch (error) {
+      setAnalysis(null)
+      const message = error instanceof Error ? error.message : 'Gemini analysis failed'
+      showToast(message)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
@@ -153,6 +174,9 @@ export default function AnalysisPage() {
               <div style={{ background: '#111', border: '1px solid #f59e0b33', borderRadius: '8px', padding: '12px' }}>
                 <p style={{ fontSize: '9px', color: '#475569', marginBottom: '8px' }}>SUSPICIOUS COMMIT</p>
                 <p style={{ fontSize: '12px', color: '#f59e0b', fontFamily: 'monospace', lineHeight: '1.6' }}>{analysis.suspicious_commit}</p>
+                {analysis.suspicious_commit_reason && (
+                  <p style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.6', marginTop: '8px' }}>{analysis.suspicious_commit_reason}</p>
+                )}
               </div>
 
               <div style={{ background: '#0d1117', border: '1px solid #1e1e1e', borderRadius: '8px', padding: '12px' }}>

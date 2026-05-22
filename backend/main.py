@@ -18,7 +18,7 @@ app = FastAPI(title="OpsGemini API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origin_regex=r"^http://localhost:\d+$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,6 +89,10 @@ async def analyze_incident(payload: IncidentPayload) -> AnalysisResult:
         persist_id = matching.id if matching else f"{payload.service_name}-latest"
         await firebase_service.save_analysis(persist_id, analysis)
         return analysis
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to analyze incident: {exc}") from exc
 
