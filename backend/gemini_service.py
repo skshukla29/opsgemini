@@ -84,7 +84,11 @@ class GeminiService:
         )
 
         try:
-            response = await self._model.generate_content_async(prompt)
+            try:
+                response = await self._model.generate_content_async(prompt)
+            except Exception as exc:
+                raise RuntimeError("Gemini API request failed; check GEMINI_API_KEY and model availability") from exc
+
             raw_text = (response.text or "").strip()
             if not raw_text:
                 raise ValueError("Gemini returned an empty response")
