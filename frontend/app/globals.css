@@ -1,0 +1,5 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #f1f5f9; font-family: Inter, sans-serif; }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

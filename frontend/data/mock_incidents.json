@@ -1,0 +1,47 @@
+[
+  {
+    "id": "dt-9921",
+    "service": "payment-api",
+    "severity": "critical",
+    "anomaly": "Process crashed repeatedly due to unhandled promise rejection. HTTP 500 spike 340%.",
+    "logs": "FATAL: connection to database failed. process.env.DB_PASSWORD is undefined at db.connect()",
+    "status": "open",
+    "created_at": "2026-05-18T14:05:00Z"
+  },
+  {
+    "id": "dt-9922",
+    "service": "frontend-web",
+    "severity": "high",
+    "anomaly": "JavaScript Exception Rate increased by 400% after deployment webhook at 14:32 UTC.",
+    "logs": "TypeError: Cannot read properties of undefined (reading 'map') at ProductList.jsx:14",
+    "status": "open",
+    "created_at": "2026-05-18T14:30:00Z"
+  },
+  {
+    "id": "dt-9923",
+    "service": "auth-service",
+    "severity": "critical",
+    "anomaly": "Response time P99 exceeded 8000ms. Timeout errors on /api/auth/token endpoint.",
+    "logs": "Error: Redis connection timeout after 5000ms. ECONNREFUSED 127.0.0.1:6379",
+    "status": "open",
+    "created_at": "2026-05-18T14:52:00Z"
+  },
+  {
+    "id": "dt-9924",
+    "service": "notification-worker",
+    "severity": "medium",
+    "anomaly": "Memory usage increased 280% over 2 hours. OOMKilled events detected.",
+    "logs": "Heap out of memory: FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory",
+    "status": "open",
+    "created_at": "2026-05-18T15:12:00Z"
+  },
+  {
+    "id": "dt-9925",
+    "service": "image-processor",
+    "severity": "high",
+    "anomaly": "Docker container restart loop detected. Exit code 1 after 3 restarts.",
+    "logs": "Error: Cannot find module 'sharp'. Did you mean to install it? npm ERR! missing: sharp@^0.33.0",
+    "status": "open",
+    "created_at": "2026-05-18T15:35:00Z"
+  }
+]
