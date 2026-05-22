@@ -1,3 +1,70 @@
+# OpsGemini (Local README)
+
+Short demo project that analyzes incident logs using a FastAPI backend and a Next.js frontend. The backend calls Gemini (via your local `GEMINI_API_KEY`) to produce structured JSON analyses that the UI renders.
+
+## Quick overview
+- Backend: FastAPI (uvicorn) — serves API endpoints under `/api/*`.
+- Frontend: Next.js app — dashboard UI that posts to `/api/analyze-incident`.
+
+## Important files
+- [backend/.env](backend/.env) — local environment file (UNTRACKED). Add your `GEMINI_API_KEY` and optional `GEMINI_MODEL` here.
+- [frontend/lib/api.ts](frontend/lib/api.ts) — client code that points the frontend to the backend API base URL.
+- [frontend/app/dashboard/[id]/page.tsx](frontend/app/dashboard/[id]/page.tsx) — analysis UI.
+
+## Ports used (local demo)
+- Backend (uvicorn): `http://127.0.0.1:8000` (API endpoints)
+- Frontend (Next dev): `http://localhost:3006` (may fall back to other ports if 3000-3005 are in use)
+
+## Setup & run (Windows / PowerShell)
+
+1. Backend venv & dependencies
+
+```powershell
+cd backend
+# If you use the repo-root .venv, adjust paths accordingly (e.g., ..\.venv\Scripts\python.exe)
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+2. Add a local `.env` for sensitive keys (do NOT commit)
+
+Create `backend/.env` with at least:
+
+```
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE   # add your local key (do NOT commit)
+# Optional: GEMINI_MODEL=models/gemini-flash-latest
+```
+
+3. Start the backend (from `backend` folder)
+
+```powershell
+.\venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+4. Start the frontend (from `frontend` folder)
+
+```powershell
+cd frontend
+npm install
+npm run dev
+# Next will try 3000 and increment if occupied; current demo used 3006.
+```
+
+5. Open the dashboard in your browser
+
+Visit `http://localhost:3006/dashboard/dt-9921` (replace port if Next chose a different one). Click **Analyze with Gemini** to run a live analysis.
+
+## Notes & troubleshooting
+- Ensure `backend/.env` is present and contains a valid `GEMINI_API_KEY` before starting the backend. The app loads `backend/.env` at startup.
+- If you prefer fixed frontend port 3000, stop the process occupying it and restart Next; Next will otherwise choose the next available port.
+- The frontend uses `NEXT_PUBLIC_API_URL` if set; otherwise it defaults to `http://localhost:8000` (see [frontend/lib/api.ts](frontend/lib/api.ts)).
+
+## Project status
+- The demo performs live Gemini analysis (no static/mock responses). The UI intentionally uses small `MOCK_INCIDENTS` only for initial telemetry fields (service name, example logs). Analysis results are fetched from the backend at runtime.
+
+---
+Created for local demo and verification. If you want, I can add a short `dev-setup.md` with screenshots or adjust ports to fixed values.
 # OpsGemini
 
 OpsGemini is an AI-powered CI/CD incident debugging agent that bridges Dynatrace production anomalies with GitLab code context. It helps teams reduce MTTR by generating root-cause analysis, confidence scoring, suspicious commit hints, and suggested patches using Gemini.

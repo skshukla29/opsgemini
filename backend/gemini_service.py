@@ -5,6 +5,7 @@ import os
 import re
 
 import google.generativeai as genai
+import asyncio
 
 from models import AnalysisResult, IncidentPayload
 
@@ -22,16 +23,18 @@ class GeminiService:
     def __init__(self) -> None:
         self._api_key = os.getenv("GEMINI_API_KEY", "").strip()
         self._enabled = bool(self._api_key)
+        # prefer a model name from env but keep a sensible default
+        raw_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        # If the env uses the 'models/...' form, convert to the client model name (strip 'models/')
+        self._model_name = raw_model.split('/', 1)[1] if raw_model.startswith('models/') else raw_model
 
         if self._enabled:
             genai.configure(api_key=self._api_key)
-            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5")
-            self._model = genai.GenerativeModel(
-                model_name=model_name,
-                system_instruction=SYSTEM_INSTRUCTION,
-            )
-        else:
-            self._model = None
+            # Construct a GenerativeModel instance to use generate_content_async
+            try:
+                self._model = genai.GenerativeModel(model_name=self._model_name, system_instruction=SYSTEM_INSTRUCTION)
+            except Exception:
+                self._model = None
 
     def _extract_json(self, raw_text: str) -> dict:
         text = raw_text.strip()
@@ -49,7 +52,7 @@ class GeminiService:
             raise
 
     async def analyze(self, payload: IncidentPayload) -> AnalysisResult:
-        if not self._enabled or self._model is None:
+        if not self._enabled:
             raise RuntimeError("GEMINI_API_KEY is not configured")
 
         anomaly = payload.dynatrace_anomaly.strip()
@@ -85,8 +88,15 @@ class GeminiService:
 
         try:
             try:
+                if self._model is None:
+                    raise RuntimeError("Gemini model not available for your API key. Set GEMINI_MODEL to a model your key supports.")
                 response = await self._model.generate_content_async(prompt)
             except Exception as exc:
+                msg = str(exc)
+                if "not found" in msg or "not supported for generateContent" in msg or "Requested entity was not found" in msg:
+                    raise RuntimeError(
+                        "Gemini model not available for your API key. Set GEMINI_MODEL to a model your key supports."
+                    ) from exc
                 raise RuntimeError("Gemini API request failed; check GEMINI_API_KEY and model availability") from exc
 
             raw_text = (response.text or "").strip()
