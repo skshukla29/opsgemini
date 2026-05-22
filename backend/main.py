@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -18,11 +19,14 @@ app = FastAPI(title="OpsGemini API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^http://localhost:\d+$",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+port = int(os.environ.get("PORT", 8000))
 
 
 dynatrace_service = DynatraceService()
@@ -119,3 +123,9 @@ async def get_stats() -> dict[str, Any]:
         "total_incidents": len(items),
         "resolved_count": resolved_count,
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

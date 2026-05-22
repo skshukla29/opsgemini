@@ -36,7 +36,7 @@ export interface StatsResponse {
   resolved_count: number;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -47,17 +47,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getIncidents(): Promise<IncidentRecord[]> {
-  const response = await fetch(`${API_BASE}/api/incidents`, { cache: "no-store" });
+  const response = await fetch(`${BASE_URL}/api/incidents`, { cache: "no-store" });
   return handleResponse<IncidentRecord[]>(response);
 }
 
 export async function getIncident(id: string): Promise<IncidentRecord> {
-  const response = await fetch(`${API_BASE}/api/incidents/${id}`, { cache: "no-store" });
+  const response = await fetch(`${BASE_URL}/api/incidents/${id}`, { cache: "no-store" });
   return handleResponse<IncidentRecord>(response);
 }
 
 export async function analyzeIncident(payload: IncidentPayload): Promise<AnalysisResult> {
-  const response = await fetch(`${API_BASE}/api/analyze-incident`, {
+  const response = await fetch(`${BASE_URL}/api/analyze-incident`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -68,13 +68,13 @@ export async function analyzeIncident(payload: IncidentPayload): Promise<Analysi
 }
 
 export async function resolveIncident(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/incidents/${id}/resolve`, {
+  const response = await fetch(`${BASE_URL}/api/incidents/${id}/resolve`, {
     method: "POST",
   });
   await handleResponse<{ status: string }>(response);
 }
 
 export async function getStats(): Promise<StatsResponse> {
-  const response = await fetch(`${API_BASE}/api/stats`, { cache: "no-store" });
+  const response = await fetch(`${BASE_URL}/api/stats`, { cache: "no-store" });
   return handleResponse<StatsResponse>(response);
 }
